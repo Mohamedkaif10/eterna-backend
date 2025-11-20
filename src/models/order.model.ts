@@ -6,22 +6,23 @@ export interface CreateOrderPayload {
   side: Side;
   amount: number;
   slippagePct?: number | undefined;
-  clientId?: string | undefined; 
+  clientId?: string | undefined;
 }
-
 
 export enum OrderStatus {
   CREATED = "created",
-  ACCEPTED = "accepted",
-  ROUTED = "routed",
+  PENDING = "pending",
+  ROUTING = "routing",
+  BUILDING = "building",
   SUBMITTED = "submitted",
-  FILLED = "filled",
+  CONFIRMED = "confirmed",
   PARTIAL = "partial_filled",
   FAILED = "failed",
+  ROUTED = "routed"
 }
 
 export interface Fill {
-  poolId: string;
+  pool: string;
   amountIn: number;
   amountOut: number;
   timestamp: string;
@@ -39,7 +40,6 @@ export interface Order {
   createdAt: string;
   updatedAt: string;
   fills: Fill[];
- clientId?: string; 
- 
-  meta?: Record<string, unknown>;
+  clientId?: string | undefined;
+  meta?: Record<string, any>;
 }

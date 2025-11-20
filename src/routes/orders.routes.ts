@@ -1,25 +1,21 @@
 
 import { FastifyInstance } from "fastify";
 import { executeOrderHandler } from "../controllers/orders.controller";
+import { wsRegister } from "../plugins/websocket.plugin"; 
 
 export default async function ordersRoutes(fastify: FastifyInstance) {
   fastify.post("/api/orders/execute", executeOrderHandler);
 
-  
   fastify.get(
     "/api/orders/updates/:orderId",
     { websocket: true },
-    (socket, req) => { 
-      console.log('WebSocket connection established!');
-      
+    (connection, req) => {
       const orderId = (req.params as { orderId: string }).orderId;
-      console.log(`Connected to order: ${orderId}`);
-
       
-      (fastify as any).wsRegister(orderId, socket);
-
-
-      socket.send(
+      console.log(`WebSocket connection established for order: ${orderId}`);
+    
+      wsRegister(orderId, connection);
+      connection.send(
         JSON.stringify({
           type: "connected",
           orderId,
@@ -27,20 +23,16 @@ export default async function ordersRoutes(fastify: FastifyInstance) {
           timestamp: new Date().toISOString()
         })
       );
-
-
-      socket.on('message', (message) => {
-        console.log('Received message:', message.toString());
+      connection.on('message', (message) => {
+        console.log(`Received message from client for order ${orderId}:`, message.toString());
       });
 
-
-      socket.on('close', () => {
-        console.log(`WebSocket connection closed for order ${orderId}`);
+      connection.on('error', (error) => {
+        console.error(`WebSocket error for order ${orderId}:`, error);
       });
 
-
-      socket.on('error', (error) => {
-        console.error(` WebSocket error for order ${orderId}:`, error);
+      connection.on('close', () => {
+        console.log(`WebSocket connection closed for order: ${orderId}`);
       });
     }
   );
