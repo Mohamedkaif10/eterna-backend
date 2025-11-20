@@ -29,7 +29,7 @@ export interface Fill {
 
 export interface Order {
   id: string;
-  type: "market"; // MVP only market
+  type: "market";
   side: Side;
   baseToken: string;
   quoteToken: string;
@@ -40,6 +40,6 @@ export interface Order {
   updatedAt: string;
   fills: Fill[];
  clientId?: string; 
-  // optional: metadata for routing/estimates
+ 
   meta?: Record<string, unknown>;
 }

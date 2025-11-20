@@ -3,8 +3,9 @@ import ordersRoutes from "./routes/orders.routes";
 import websocketPlugin from "./Plugins/websocket.plugin";
 
 const fastify = Fastify({ logger: true });
-fastify.register(ordersRoutes);
 fastify.register(websocketPlugin);
+fastify.register(ordersRoutes);
+
 
 const start = async () => {
   try {

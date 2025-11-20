@@ -2,10 +2,6 @@ import { Order, OrderStatus, CreateOrderPayload } from "../models/order.model";
 import * as InMemStore from "../stores/inmem.store";
 import { randomUUID } from "crypto";
 
-/**
- * Create an order, persist to in-memory store and return generated orderId.
- * This function only handles creation/storage for Flow 1.
- */
 export async function createOrder(payload: CreateOrderPayload): Promise<string> {
   const id = `order_${randomUUID()}`;
   const now = new Date().toISOString();
@@ -22,7 +18,7 @@ const order: Order = {
   createdAt: now,
   updatedAt: now,
   fills: [],
-  ...(payload.clientId ? { clientId: payload.clientId } : {}), // <-- FIX
+  ...(payload.clientId ? { clientId: payload.clientId } : {}),
 };
 
 
