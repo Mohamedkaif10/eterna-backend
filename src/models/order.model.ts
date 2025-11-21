@@ -18,7 +18,8 @@ export enum OrderStatus {
   CONFIRMED = "confirmed",
   PARTIAL = "partial_filled",
   FAILED = "failed",
-  ROUTED = "routed"
+  ROUTED = "routed",
+  QUEUED = "QUEUED",
 }
 
 export interface Fill {

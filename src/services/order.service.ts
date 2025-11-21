@@ -1,9 +1,8 @@
-
 import { Order, OrderStatus, CreateOrderPayload } from "../models/order.model";
 import * as InMemStore from "../stores/inmem.store";
 import { randomUUID } from "crypto";
 import { wsBroadcast, waitForWebSocketConnection } from "../plugins/websocket.plugin";
-import { startExecution } from "./execution.services";
+import { addOrderToQueue } from "./queue.service";
 
 export async function createOrder(payload: CreateOrderPayload): Promise<string> {
   const id = payload.clientId || `order_${randomUUID()}`;
@@ -17,7 +16,7 @@ export async function createOrder(payload: CreateOrderPayload): Promise<string> 
     quoteToken: payload.quoteToken,
     amount: payload.amount,
     slippagePct: payload.slippagePct ?? 0.5,
-    status: OrderStatus.CREATED,
+    status: OrderStatus.QUEUED,
     createdAt: now,
     updatedAt: now,
     fills: [],
@@ -29,30 +28,35 @@ export async function createOrder(payload: CreateOrderPayload): Promise<string> 
   (async () => {
     try {
       console.log(`⏳ Waiting for WebSocket connection for order: ${id}`);
-      await waitForWebSocketConnection(id, 10000);
-      console.log(`🔗 Client connected! Starting execution for ${id}`);
-      await sleep(500);
+      await waitForWebSocketConnection(id, 3000);
+      console.log(`🔗 Client connected! Queueing order ${id}`);
+      
       wsBroadcast(id, { 
         orderId: id, 
-        status: "accepted", 
+        status: "queued", 
         createdAt: now,
-        message: "Order accepted - starting execution"
+        message: "Order queued - waiting for execution",
+        timestamp: new Date().toISOString()
       });
-      await startExecution(id);
+      
+      await addOrderToQueue(id);
+      
     } catch (err: any) {
-      console.error("Background execution start failed or timed out:", err);
+      console.error("Failed to queue order:", err);
+      
+      order.status = OrderStatus.FAILED;
+      order.updatedAt = new Date().toISOString();
+      InMemStore.saveOrder(order);
+      
       wsBroadcast(id, { 
         orderId: id, 
         status: "failed", 
-        reason: "execution_start_failed",
-        error: err.message 
+        reason: "queue_failed",
+        error: err.message,
+        timestamp: new Date().toISOString()
       });
     }
   })();
 
   return id;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
