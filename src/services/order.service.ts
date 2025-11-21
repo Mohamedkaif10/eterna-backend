@@ -1,8 +1,7 @@
-
 import { Order, OrderStatus, CreateOrderPayload } from "../models/order.model";
 import * as InMemStore from "../stores/inmem.store";
 import { randomUUID } from "crypto";
-import { wsBroadcast } from "../plugins/websocket.plugin";
+import { wsBroadcast, waitForWebSocketConnection } from "../plugins/websocket.plugin";
 import { startExecution } from "./execution.services";
 
 export async function createOrder(payload: CreateOrderPayload): Promise<string> {
@@ -25,26 +24,48 @@ export async function createOrder(payload: CreateOrderPayload): Promise<string> 
   };
 
   InMemStore.saveOrder(order);
-  console.log(`Order created: ${id}`);
+  console.log(`📦 Order created: ${id}`);
 
-  setTimeout(() => {
-    wsBroadcast(id, { 
-      orderId: id, 
-      status: "accepted", 
-      createdAt: now,
-      message: "Order accepted and execution starting"
-    });
+ 
+  (async () => {
+    try {
+      console.log(`⏳ Waiting for WebSocket connection for order: ${id}`);
+      
+      
+      await waitForWebSocketConnection(id, 10000); 
+      
+      console.log(`🔗 Client connected! Starting execution for ${id}`);
 
-    startExecution(id).catch((e) => {
-      console.error("startExecution error:", e);
+
+      await sleep(500);
+
+  
+      wsBroadcast(id, { 
+        orderId: id, 
+        status: "accepted", 
+        createdAt: now,
+        message: "Order accepted - starting execution"
+      });
+
+
+      await startExecution(id);
+
+    } catch (err: any) {
+      console.error("Background execution start failed or timed out:", err);
+   
       wsBroadcast(id, { 
         orderId: id, 
         status: "failed", 
         reason: "execution_start_failed",
-        error: e.message 
+        error: err.message 
       });
-    });
-  }, 100); 
+    }
+  })();
+
 
   return id;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
