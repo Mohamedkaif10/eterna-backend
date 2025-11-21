@@ -4,10 +4,18 @@ import * as OrderService from "../services/order.service";
 import { CreateOrderPayload } from "../models/order.model";
 
 export async function executeOrderHandler(
-  request: FastifyRequest<{ Body: CreateOrderPayload }>,
+  request: FastifyRequest<{ 
+    Params: { orderId: string };
+    Body: CreateOrderPayload 
+  }>,
   reply: FastifyReply
 ) {
+  if (request.raw.url?.includes('websocket') || request.headers.upgrade === 'websocket') {
+    return reply.send({ message: 'Use WebSocket connection for real-time updates' });
+  }
+
   try {
+    const orderId = request.params.orderId;
     const body = request.body as unknown as CreateOrderPayload;
 
     if (!body || !body.baseToken || !body.quoteToken) {
@@ -20,16 +28,19 @@ export async function executeOrderHandler(
       return reply.status(400).send({ error: "amount must be a number > 0" });
     }
 
-    const orderId = await OrderService.createOrder({
+    const createdOrderId = await OrderService.createOrder({
       baseToken: body.baseToken,
       quoteToken: body.quoteToken,
       side: body.side,
       amount: body.amount,
       slippagePct: body.slippagePct ?? 0.5,
-      ...(body.clientId ? { clientId: body.clientId } : {}),
+      clientId: orderId
     });
 
-    return reply.status(201).send({ orderId });
+    return reply.status(201).send({ 
+      orderId: createdOrderId,
+      message: "Order execution started. WebSocket connection should receive real-time updates."
+    });
   } catch (err) {
     request.log.error(err);
     return reply.status(500).send({ error: "internal_server_error" });
