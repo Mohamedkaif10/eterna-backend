@@ -1,5 +1,6 @@
 import { Order, OrderStatus, CreateOrderPayload } from "../models/order.model";
 import * as InMemStore from "../stores/inmem.store";
+import * as RedisStore from "../stores/redis.store";
 import { randomUUID } from "crypto";
 import { wsBroadcast, waitForWebSocketConnection } from "../plugins/websocket.plugin";
 import { addOrderToQueue } from "./queue.service";
@@ -23,6 +24,7 @@ export async function createOrder(payload: CreateOrderPayload): Promise<string> 
   };
 
   InMemStore.saveOrder(order);
+  await RedisStore.saveOrderToRedis(order);
   console.log(`📦 Order created: ${id}`);
 
   (async () => {
@@ -47,6 +49,7 @@ export async function createOrder(payload: CreateOrderPayload): Promise<string> 
       order.status = OrderStatus.FAILED;
       order.updatedAt = new Date().toISOString();
       InMemStore.saveOrder(order);
+      await RedisStore.updateOrderStatus(id, OrderStatus.FAILED);
       
       wsBroadcast(id, { 
         orderId: id, 

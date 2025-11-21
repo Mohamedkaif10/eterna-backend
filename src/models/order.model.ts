@@ -10,6 +10,7 @@ export interface CreateOrderPayload {
 }
 
 export enum OrderStatus {
+  ACTIVE="active",
   CREATED = "created",
   PENDING = "pending",
   ROUTING = "routing",

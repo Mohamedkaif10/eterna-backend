@@ -4,6 +4,7 @@ import IORedis from 'ioredis';
 import { startExecution } from './execution.services';
 import { OrderStatus } from '../models/order.model';
 import * as InMemStore from '../stores/inmem.store';
+import * as RedisStore from '../stores/redis.store';
 import { wsBroadcast } from '../plugins/websocket.plugin';
 
 const connection = new IORedis({
@@ -29,10 +30,16 @@ export const worker = new Worker('order execution', async (job: Job) => {
   console.log(`🚀 Processing order ${orderId} from queue`);
   
   try {
+ 
+    await RedisStore.updateOrderStatus(orderId, OrderStatus.ACTIVE);
+    
     await startExecution(orderId);
+    
+    await RedisStore.removeOrderFromActive(orderId);
+    
     console.log(`✅ Order ${orderId} execution completed`);
     return { success: true, orderId };
-  } catch (error: any) {
+  } catch (error) {
     console.error(`❌ Order ${orderId} execution failed:`, error);
     
     const order = InMemStore.getOrder(orderId);
@@ -40,20 +47,17 @@ export const worker = new Worker('order execution', async (job: Job) => {
       order.status = OrderStatus.FAILED;
       order.updatedAt = new Date().toISOString();
       InMemStore.saveOrder(order);
-      
-      wsBroadcast(orderId, {
-        orderId,
-        status: 'failed',
-        reason: 'execution_failed',
-        error: error.message,
-        timestamp: new Date().toISOString()
-      });
+      await RedisStore.updateOrderStatus(orderId, OrderStatus.FAILED);
     }
     
     throw error;
   }
 }, {
   connection,
+  limiter: {
+    max: 100,
+    duration: 60000
+  },
   concurrency: 10
 });
 
@@ -78,6 +82,7 @@ export async function getQueueStatus(): Promise<{
   active: number;
   completed: number;
   failed: number;
+  rateLimit: string;
 }> {
   const [waiting, active, completed, failed] = await Promise.all([
     orderQueue.getWaiting(),
@@ -90,6 +95,7 @@ export async function getQueueStatus(): Promise<{
     waiting: waiting.length,
     active: active.length,
     completed: completed.length,
-    failed: failed.length
+    failed: failed.length,
+    rateLimit: "100 orders/minute"
   };
 }
