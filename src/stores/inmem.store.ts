@@ -42,17 +42,23 @@ export const meteoraPool: Pool = {
   feePct: 0.20,
 };
 
+export const wsolPool = {
+  id: "wsol_1",
+  tokenA: "WSOL",
+  tokenB: "TOKEN_B",
+  reserveA: 50000,
+  reserveB: 50000,
+  feePct: 0.25
+};
+
 /**
- * Apply a swap on the given pool.
+
  *
- * @param poolId - "raydium_1" | "meteora_1"
- * @param amountIn - amount of tokenA being sold to receive tokenB
- * @returns amountOut - how much tokenB is received
+ * @param poolId
+ * @param amountIn
+ * @returns 
  *
- * Notes:
- * - This assumes the trade is tokenA -> tokenB (amountIn is tokenA).
- * - Fee is applied to amountIn.
- * - Reserves are updated in-place.
+ 
  */
 export function applySwap(poolId: string, amountIn: number): number {
   const pool = poolId === raydiumPool.id ? raydiumPool : meteoraPool;
@@ -68,4 +74,11 @@ export function applySwap(poolId: string, amountIn: number): number {
   pool.reserveB = Number((B - amountOut).toFixed(6));
 
   return Number(amountOut.toFixed(6));
+}
+
+export function getPoolByToken(token: string) {
+  if (token === "WSOL") return wsolPool;
+  if (token === "TOKEN_A") return raydiumPool; 
+  if (token === "TOKEN_B") return meteoraPool; 
+  return null;
 }

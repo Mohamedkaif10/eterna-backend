@@ -1,132 +1,144 @@
-
-import { wsBroadcast } from "../plugins/websocket.plugin"; 
+import { wsBroadcast } from "../lib/ws";
 import { Order, OrderStatus } from "../models/order.model";
 import * as InMemStore from "../stores/inmem.store";
 import { findBestRoute } from "./routing.service";
 import { randomUUID } from "crypto";
+import { isNativeSol, wrapSol, unwrapSol, WRAPPED_SOL } from "../utils/sol.util";
 
 export async function startExecution(orderId: string) {
-  console.log(`Starting execution for order: ${orderId}`);
-  
   try {
+
     const order = InMemStore.getOrder(orderId);
     if (!order) {
-      console.error(`Order not found: ${orderId}`);
-      wsBroadcast(orderId, { 
-        orderId, 
-        status: "failed", 
-        reason: "order_not_found" 
-      });
+      wsBroadcast(orderId, { orderId, status: "failed", reason: "order_not_found" });
       return;
     }
 
+    console.log(`\n=== START EXECUTION ${orderId} ===`);
+
     const now = () => new Date().toISOString();
 
-    console.log(`Order ${orderId}: PENDING`);
+    let inputAmount = order.amount;
+    let tradeBaseToken = order.baseToken;
+
+    if (isNativeSol(order.baseToken)) {
+      console.log(`[WSOL] Wrapping ${inputAmount} SOL → WSOL`);
+
+      inputAmount = wrapSol(inputAmount);
+      tradeBaseToken = WRAPPED_SOL;
+
+      wsBroadcast(orderId, {
+        orderId,
+        status: "wrap_sol",
+        amount: inputAmount,
+        message: "Wrapped SOL to WSOL"
+      });
+    }
     order.status = OrderStatus.PENDING;
     order.updatedAt = now();
     InMemStore.saveOrder(order);
-    wsBroadcast(orderId, { 
-      orderId, 
-      status: "pending", 
-      timestamp: order.updatedAt,
-      message: "Order processing started" 
+
+    wsBroadcast(orderId, {
+      orderId,
+      status: "pending",
+      timestamp: order.updatedAt
     });
 
-    await new Promise(res => setTimeout(res, 300));
-
-    console.log(`Order ${orderId}: ROUTING`);
-    wsBroadcast(orderId, { 
-      orderId, 
-      status: "routing", 
+    await sleep(300);
+    wsBroadcast(orderId, {
+      orderId,
+      status: "routing",
       timestamp: now(),
-      message: "Finding best route..." 
+      message: "Fetching quotes from Raydium & Meteora"
     });
-    
-    const bestQuote = await findBestRoute(order.amount);
-    console.log(`Order ${orderId}: Best route found:`, bestQuote);
 
-    order.meta = { ...order.meta, bestQuote };
+    const { best, routingLog } = await findBestRoute(inputAmount);
+    order.meta = { ...order.meta, routingLog, bestRoute: best };
     order.status = OrderStatus.ROUTED;
     order.updatedAt = now();
     InMemStore.saveOrder(order);
-    wsBroadcast(orderId, { 
-      orderId, 
-      status: "routed", 
-      route: bestQuote, 
-      timestamp: order.updatedAt,
-      message: `Best route found via ${bestQuote.venue}` 
+
+    wsBroadcast(orderId, {
+      orderId,
+      status: "routed",
+      route: best,
+      routingLog,
+      timestamp: order.updatedAt
     });
 
-    await new Promise(res => setTimeout(res, 300));
-
-    console.log(`Order ${orderId}: BUILDING`);
+    await sleep(300);
     order.status = OrderStatus.BUILDING;
     order.updatedAt = now();
     InMemStore.saveOrder(order);
-    wsBroadcast(orderId, { 
-      orderId, 
-      status: "building", 
-      timestamp: order.updatedAt,
-      message: "Building transaction..." 
+
+    wsBroadcast(orderId, {
+      orderId,
+      status: "building",
+      timestamp: order.updatedAt
     });
 
-    await new Promise((res) => setTimeout(res, 500));
-
-    console.log(`Order ${orderId}: SUBMITTING`);
-    const expectedOut = Number(bestQuote.expectedOut);
+    await sleep(400);
+    const expectedOut = best.expectedOut;
     const slippagePct = order.slippagePct ?? 0.5;
     const minAcceptableOut = expectedOut * (1 - slippagePct / 100);
 
-    const poolId = bestQuote.venue === "raydium" ? InMemStore.raydiumPool.id : InMemStore.meteoraPool.id;
-    const actualOut = InMemStore.applySwap(poolId, order.amount);
+    const poolId =
+      best.venue === "raydium"
+        ? InMemStore.raydiumPool.id
+        : InMemStore.meteoraPool.id;
 
-    console.log(`Order ${orderId}: Slippage check - Expected: ${expectedOut}, Actual: ${actualOut}, Min: ${minAcceptableOut}`);
+    const actualOut = InMemStore.applySwap(poolId, inputAmount);
 
     if (actualOut < minAcceptableOut) {
-      console.log(`Order ${orderId}: SLIPPAGE EXCEEDED`);
       order.status = OrderStatus.FAILED;
       order.updatedAt = now();
       InMemStore.saveOrder(order);
 
-      wsBroadcast(orderId, { 
-        orderId, 
-        status: "failed", 
-        reason: "slippage_exceeded", 
-        expectedOut, 
-        actualOut, 
-        minAcceptableOut,
-        timestamp: order.updatedAt,
-        message: "Transaction failed: slippage too high" 
+      wsBroadcast(orderId, {
+        orderId,
+        status: "failed",
+        reason: "slippage_exceeded",
+        expectedOut,
+        actualOut,
+        minAcceptableOut
       });
+
       return;
     }
-
     const txHash = `mock_tx_${randomUUID().slice(0, 8)}`;
     order.meta = { ...order.meta, txHash };
+
     order.status = OrderStatus.SUBMITTED;
     order.updatedAt = now();
     InMemStore.saveOrder(order);
-    
-    wsBroadcast(orderId, { 
-      orderId, 
-      status: "submitted", 
-      txHash, 
-      timestamp: order.updatedAt,
-      message: "Transaction submitted to network" 
+
+    wsBroadcast(orderId, {
+      orderId,
+      status: "submitted",
+      txHash,
+      timestamp: order.updatedAt
     });
 
-    console.log(`Order ${orderId}: SUBMITTED with tx: ${txHash}`);
+    await sleep(800);
 
-    await new Promise((res) => setTimeout(res, 800));
+    let outputAmount = actualOut;
 
-    console.log(`Order ${orderId}: CONFIRMING`);
-    const filledAmountOut = actualOut;
+    if (isNativeSol(order.baseToken)) {
+      outputAmount = unwrapSol(actualOut);
+
+      wsBroadcast(orderId, {
+        orderId,
+        status: "unwrap_sol",
+        amount: outputAmount,
+        message: "Unwrapped WSOL → SOL"
+      });
+    }
+
     const fill = {
-      pool: bestQuote.venue,
+      pool: best.venue,
       amountIn: order.amount,
-      amountOut: filledAmountOut,
-      timestamp: new Date().toISOString(),
+      amountOut: outputAmount,
+      timestamp: now()
     };
 
     order.fills.push(fill);
@@ -134,35 +146,28 @@ export async function startExecution(orderId: string) {
     order.updatedAt = now();
     InMemStore.saveOrder(order);
 
-    const avgPrice = Number((filledAmountOut / order.amount).toFixed(12));
-
     wsBroadcast(orderId, {
       orderId,
       status: "confirmed",
       txHash,
       fills: order.fills,
-      avgPrice,
-      timestamp: order.updatedAt,
-      message: "Order completed successfully!"
+      avgPrice: Number((outputAmount / order.amount).toFixed(6)),
+      timestamp: order.updatedAt
     });
 
-    console.log(`Order ${orderId}: COMPLETED - Avg Price: ${avgPrice}`);
+    console.log(`=== ORDER COMPLETE ${orderId} ===\n`);
 
   } catch (err: any) {
-    console.error(`Execution error for order ${orderId}:`, err);
-    const reason = err?.message ?? "execution_error";
-    const order = InMemStore.getOrder(orderId);
-    if (order) {
-      order.status = OrderStatus.FAILED;
-      order.updatedAt = new Date().toISOString();
-      InMemStore.saveOrder(order);
-    }
-    wsBroadcast(orderId, { 
-      orderId, 
-      status: "failed", 
-      reason,
-      error: err.message,
-      message: `Order failed: ${reason}` 
+    console.error(err);
+
+    wsBroadcast(orderId, {
+      orderId,
+      status: "failed",
+      reason: err.message ?? "execution_error"
     });
   }
+}
+
+function sleep(ms: number) {
+  return new Promise((res) => setTimeout(res, ms));
 }
