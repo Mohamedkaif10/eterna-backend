@@ -6,7 +6,7 @@ import { OrderStatus } from '../models/order.model';
 import * as InMemStore from '../stores/inmem.store';
 import * as RedisStore from '../stores/redis.store';
 import * as PostgresStore from "../stores/postgres.store";
-import { wsBroadcast } from '../plugins/websocket.plugin';
+import { wsBroadcast } from '../plugins/websocket.plugin.js';
 
 const connection = new IORedis({
   maxRetriesPerRequest: null

@@ -1,6 +1,6 @@
 import { FastifyInstance } from "fastify";
 import { executeOrderHandler } from "../controllers/orders.controller";
-import { wsRegister } from "../plugins/websocket.plugin"; 
+import { wsRegister } from "../plugins/websocket.plugin.js"; 
 
 export default async function ordersRoutes(fastify: FastifyInstance) {
   

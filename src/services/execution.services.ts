@@ -1,5 +1,5 @@
 
-import { wsBroadcast } from "../plugins/websocket.plugin";
+import { wsBroadcast } from "../plugins/websocket.plugin.js";
 import { Order, OrderStatus } from "../models/order.model";
 import * as InMemStore from "../stores/inmem.store";
 import { findBestRoute } from "./routing.service";

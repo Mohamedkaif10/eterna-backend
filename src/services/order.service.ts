@@ -3,7 +3,7 @@ import * as InMemStore from "../stores/inmem.store";
 import * as RedisStore from "../stores/redis.store";
 import * as PostgresStore from "../stores/postgres.store";
 import { randomUUID } from "crypto";
-import { wsBroadcast, waitForWebSocketConnection } from "../plugins/websocket.plugin";
+import { wsBroadcast, waitForWebSocketConnection } from "../plugins/websocket.plugin.js";
 import { addOrderToQueue } from "./queue.service";
 
 export async function createOrder(payload: CreateOrderPayload): Promise<string> {

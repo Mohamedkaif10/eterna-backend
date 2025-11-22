@@ -1,8 +1,8 @@
 
 import Fastify from "fastify";
 import ordersRoutes from "./routes/orders.routes";
-import websocketPlugin from "./plugins/websocket.plugin";
-import bullBoardPlugin from "./plugins/bull-board.plugin";
+import websocketPlugin from "./plugins/websocket.plugin.js";
+import bullBoardPlugin from "./plugins/bull-board.plugin.js";
 import queueRoutes from './routes/queue.route';
 import { initDatabase } from './config/database';
 import historyRoutes from './routes/history.routes';
