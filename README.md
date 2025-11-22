@@ -104,3 +104,49 @@ GET /api/redis/active-orders
 GET /api/history/orders
 GET /api/history/orders/:status
 ```
+
+## Example Json 
+```
+{
+    "orderId": "order40",
+    "status": "routed",
+    "route": {
+        "venue": "raydium",
+        "expectedOut": 14.901939413008332,
+        "priceImpactPct": 0.014970730724360804,
+        "feePct": 0.25
+    },
+    "routingLog": {
+        "raydium": {
+            "venue": "raydium",
+            "expectedOut": 14.901939413008332,
+            "priceImpactPct": 0.014970730724360804,
+            "feePct": 0.25
+        },
+        "meteora": {
+            "venue": "meteora",
+            "expectedOut": 12.24651517879794,
+            "priceImpactPct": 0.013636363636363637,
+            "feePct": 0.2
+        },
+        "chosen": "raydium",
+        "timestamp": "2025-11-22T15:29:37.337Z"
+    },
+    "timestamp": "2025-11-22T15:29:37.339Z",
+    "message": "Best route found via raydium",
+    "step": 3,
+    "totalSteps": 7
+}
+```
+
+For the post request 
+```
+http://localhost:3000/api/orders/order40
+{
+  "side": "buy",
+  "baseToken": "TOKEN_B",
+  "quoteToken": "TOKEN_A",
+  "amount": 15,
+  "slippagePct": 0.7
+}
+```
