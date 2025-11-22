@@ -1,6 +1,7 @@
 import { Order, OrderStatus, CreateOrderPayload } from "../models/order.model";
 import * as InMemStore from "../stores/inmem.store";
 import * as RedisStore from "../stores/redis.store";
+import * as PostgresStore from "../stores/postgres.store";
 import { randomUUID } from "crypto";
 import { wsBroadcast, waitForWebSocketConnection } from "../plugins/websocket.plugin";
 import { addOrderToQueue } from "./queue.service";
@@ -25,13 +26,15 @@ export async function createOrder(payload: CreateOrderPayload): Promise<string> 
 
   InMemStore.saveOrder(order);
   await RedisStore.saveOrderToRedis(order);
-  console.log(`📦 Order created: ${id}`);
+  await PostgresStore.saveOrderToPostgres(order);
+  
+  console.log(`Order created: ${id}`);
 
   (async () => {
     try {
-      console.log(`⏳ Waiting for WebSocket connection for order: ${id}`);
+      console.log(` Waiting for WebSocket connection for order: ${id}`);
       await waitForWebSocketConnection(id, 3000);
-      console.log(`🔗 Client connected! Queueing order ${id}`);
+      console.log(`Client connected! Queueing order ${id}`);
       
       wsBroadcast(id, { 
         orderId: id, 
@@ -48,8 +51,10 @@ export async function createOrder(payload: CreateOrderPayload): Promise<string> 
       
       order.status = OrderStatus.FAILED;
       order.updatedAt = new Date().toISOString();
+      
       InMemStore.saveOrder(order);
       await RedisStore.updateOrderStatus(id, OrderStatus.FAILED);
+      await PostgresStore.updateOrderStatusInPostgres(id, OrderStatus.FAILED);
       
       wsBroadcast(id, { 
         orderId: id, 

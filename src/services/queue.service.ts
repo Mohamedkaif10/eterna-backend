@@ -5,6 +5,7 @@ import { startExecution } from './execution.services';
 import { OrderStatus } from '../models/order.model';
 import * as InMemStore from '../stores/inmem.store';
 import * as RedisStore from '../stores/redis.store';
+import * as PostgresStore from "../stores/postgres.store";
 import { wsBroadcast } from '../plugins/websocket.plugin';
 
 const connection = new IORedis({
@@ -27,20 +28,21 @@ export const orderQueue = new Queue('order execution', {
 export const worker = new Worker('order execution', async (job: Job) => {
   const { orderId } = job.data;
   
-  console.log(`🚀 Processing order ${orderId} from queue`);
+  console.log(`Processing order ${orderId} from queue`);
   
   try {
  
     await RedisStore.updateOrderStatus(orderId, OrderStatus.ACTIVE);
+     await PostgresStore.updateOrderStatusInPostgres(orderId, OrderStatus.ACTIVE);
     
     await startExecution(orderId);
     
     await RedisStore.removeOrderFromActive(orderId);
     
-    console.log(`✅ Order ${orderId} execution completed`);
+    console.log(`Order ${orderId} execution completed`);
     return { success: true, orderId };
   } catch (error) {
-    console.error(`❌ Order ${orderId} execution failed:`, error);
+    console.error(`Order ${orderId} execution failed:`, error);
     
     const order = InMemStore.getOrder(orderId);
     if (order) {
@@ -48,6 +50,7 @@ export const worker = new Worker('order execution', async (job: Job) => {
       order.updatedAt = new Date().toISOString();
       InMemStore.saveOrder(order);
       await RedisStore.updateOrderStatus(orderId, OrderStatus.FAILED);
+        await PostgresStore.updateOrderStatusInPostgres(orderId, OrderStatus.FAILED);
     }
     
     throw error;
@@ -62,11 +65,11 @@ export const worker = new Worker('order execution', async (job: Job) => {
 });
 
 worker.on('completed', (job) => {
-  console.log(`🎉 Job ${job.id} completed for order ${job.data.orderId}`);
+  console.log(`Job ${job.id} completed for order ${job.data.orderId}`);
 });
 
 worker.on('failed', (job, err) => {
-  console.error(`💥 Job ${job?.id} failed for order ${job?.data.orderId}:`, err);
+  console.error(`Job ${job?.id} failed for order ${job?.data.orderId}:`, err);
 });
 
 export async function addOrderToQueue(orderId: string): Promise<void> {
@@ -74,7 +77,7 @@ export async function addOrderToQueue(orderId: string): Promise<void> {
     jobId: orderId,
     delay: 500
   });
-  console.log(`📥 Order ${orderId} added to queue`);
+  console.log(`Order ${orderId} added to queue`);
 }
 
 export async function getQueueStatus(): Promise<{
