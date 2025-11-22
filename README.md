@@ -150,3 +150,8 @@ http://localhost:3000/api/orders/order40
   "slippagePct": 0.7
 }
 ```
+## Routing 
+<img width="1018" height="291" alt="Screenshot 2025-11-22 at 9 02 06 PM" src="https://github.com/user-attachments/assets/9ac62257-f13a-4145-847c-845161329d81" />
+
+
+
